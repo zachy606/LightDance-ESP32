@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config.h"
+#include "led_def.h"
 #include "driver/rmt_encoder.h"
 #include "driver/rmt_tx.h"
 #include "esp_attr.h"
