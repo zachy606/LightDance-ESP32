@@ -8,23 +8,26 @@
 extern "C" void app_main();
 
 #define N_STRIP_CH 4
-#define N_OF_CH 40
+#define N_OF_CH 10
 
 void config_led_driver(LedDriver& ledDriver)
 {
     led_config_t ch_configs[N_STRIP_CH + N_OF_CH];
 
-    // PCA9955B addresses
-    uint8_t pca_addresses[8] = {0x1f, 0x20, 0x22, 0x23, 0x5b, 0x5c, 0x5e, 0x5f};
+    // PCA9955B addresses 0x1f, 0x20, 0x22, 0x23, 0x5b, 0x5c, 0x5e, 0x5f
+    uint8_t pca_addresses[N_OF_CH/5] = {0x1f, 0x20}; 
 
     // Configure 4 LED strips
     for(int i=0; i<N_STRIP_CH; i++)
     {
         ch_configs[i].type = LED_TYPE_STRIP;
         ch_configs[i].led_count = 100;
-        ch_configs[i].gpio_or_addr = 23+i; // GPIO 23, 24, 25, 26
         ch_configs[i].pca_channel = 0;
     }
+    ch_configs[0].gpio_or_addr = 12;
+    ch_configs[1].gpio_or_addr = 14;
+    ch_configs[2].gpio_or_addr = 27;
+    ch_configs[3].gpio_or_addr = 26;
 
     // Configure 20 optical fiber channels
     for(int i=0; i<N_OF_CH; i++)
@@ -35,7 +38,7 @@ void config_led_driver(LedDriver& ledDriver)
         ch_configs[N_STRIP_CH + i].pca_channel = i % 5; // Channel within each PCA
     }
 
-    ESP_ERROR_CHECK(ledDriver.config(ch_configs, N_STRIP_CH + N_OF_CH));
+    ledDriver.config(ch_configs, N_STRIP_CH + N_STRIP_CH);
 }
 
 color_t GREEN = {255, 0, 0};
@@ -48,7 +51,7 @@ const color_t *cplt_frame[N_STRIP_CH + N_OF_CH];
 
 void app_main(void)
 {
-    LedDriver ledDriver;
+    LedDriver ledDriver = LedDriver();
     config_led_driver(ledDriver);
 
     // Initialize complete frame pointers
@@ -76,9 +79,11 @@ void app_main(void)
             of_frame[i][0] = RED;
         }
 
-        ESP_ERROR_CHECK(ledDriver.write(cplt_frame));
+        ledDriver.write(cplt_frame);
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        ESP_LOGI("APP", "Set to RED");
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
 
         // Set strips to GREEN
         for(int i=0; i<N_STRIP_CH; i++)
@@ -95,9 +100,11 @@ void app_main(void)
             of_frame[i][0] = GREEN;
         }
 
-        ESP_ERROR_CHECK(ledDriver.write(cplt_frame));
+        ledDriver.write(cplt_frame);
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        ESP_LOGI("APP", "Set to GREEN");
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
 
         // Set strips to BLUE
         for(int i=0; i<N_STRIP_CH; i++)
@@ -114,9 +121,11 @@ void app_main(void)
             of_frame[i][0] = BLUE;
         }
 
-        ESP_ERROR_CHECK(ledDriver.write(cplt_frame));
+        ledDriver.write(cplt_frame);
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        ESP_LOGI("APP", "Set to BLUE");
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
 
         
     }

@@ -28,13 +28,16 @@ LedDriver::~LedDriver() {
 }
 
 esp_err_t LedDriver::config(const led_config_t* configs, const int _ch_num) {
-    if(!configs) {
+    if(configs == nullptr) {
+        ESP_LOGE(TAG, "configs is null");
         return ESP_ERR_INVALID_ARG;
     }
     if(_ch_num < 0 || _ch_num > MAX_CHANNEL_NUM) {
+        ESP_LOGE(TAG, "Invalid channel number: %d", _ch_num);
         return ESP_ERR_INVALID_ARG;
     }
     if(!bus_handle) {
+        ESP_LOGE(TAG, "I2C bus not initialized");
         return ESP_ERR_INVALID_STATE;  // bus not available
     }
 
@@ -50,11 +53,11 @@ esp_err_t LedDriver::config(const led_config_t* configs, const int _ch_num) {
         esp_err_t r = channel_handle[i].config(configs[i]);
         if(r != ESP_OK) {
             ESP_LOGE(TAG, "channel %d config failed: %s", i, esp_err_to_name(r));
-            for(int j = 0; j < i; ++j) {
-                (void)channel_handle[j].detach();
-            }
-            ch_num = -1;
-            return r;
+            // for(int j = 0; j < i; ++j) {
+            //     (void)channel_handle[j].detach();
+            // }
+            // ch_num = -1;
+            // return r;
         }
     }
 
