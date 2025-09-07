@@ -1,11 +1,22 @@
-#include <stdio.h>
+#include"app_config.h"
+#include "pattern_table.h"
+#include "player.h"
+#include "sdcard.h"
+#include "state_changer.h"
 
 #include <freertos/FreeRTOS.h>
 
 #include "LedDriver.hpp"
 #include "led_def.h"
 
-extern "C" void app_main();
+
+
+#define TAG "PLAYER_MAIN"
+
+static player P;
+static PlayerState State = STATE_IDLE;
+
+extern "C" void app_main(void);
 
 #define N_STRIP_CH 4
 #define N_OF_CH 10
@@ -128,5 +139,11 @@ void app_main(void)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
 
         
-    }
+    
+//     cmd_init(&P);
+//     cmd_start(&P,&State,0,0);
+//     cmd_pause(&P,&State);
+//     cmd_resume(&P,&State);
+//     cmd_stop(&P,&State);
+//     cmd_exit(&P,&State);
 }
