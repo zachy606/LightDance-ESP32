@@ -25,7 +25,7 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
     PatternTable_init(&p->Reader, mount_point);
 
 
-        if (!PatternTable_load_times(&p->Reader)) {
+    if (!PatternTable_load_times(&p->Reader)) {
         ESP_LOGE("Player init", "Failed to load times.txt");
         unmount_sdcard(&p->Reader.card);
         return;

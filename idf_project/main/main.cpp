@@ -137,7 +137,7 @@ void app_main(void)
         ESP_LOGI("APP", "Set to BLUE");
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-
+    }
         
     
 //     cmd_init(&P);

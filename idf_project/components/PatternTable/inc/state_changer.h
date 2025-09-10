@@ -13,15 +13,18 @@ typedef enum {
     STATE_RUNNING,
     STATE_PAUSED,
     STATE_STOPPED,
+    STATE_DELAY,
     STATE_EXITING
 } PlayerState;
 
-void cmd_init(player *p);
-void cmd_start(player *p, PlayerState *state ,int delaytime, int delaylight);
-void cmd_pause(player *p, PlayerState *state);
-void cmd_resume(player *p, PlayerState *state);
-void cmd_stop(player *p, PlayerState *state);
-void cmd_exit(player *p, PlayerState *state);
+void state_init(player *p);
+void state_start(player *p, PlayerState *state);
+void state_pause(player *p, PlayerState *state);
+void state_resume(player *p, PlayerState *state);
+void state_stop(player *p, PlayerState *state);
+void state_exit(player *p, PlayerState *state);
+void state_delay(player *p, PlayerState *state,int delaytime,int delaylight);
+void get_state(PlayerState *state);
 
 #ifdef __cplusplus
 }
