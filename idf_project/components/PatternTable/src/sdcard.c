@@ -1,4 +1,5 @@
 #include"app_config.h"
+#include "esp_err.h"
 #include "sdcard.h"
 #define TAG "SDcard"
 
@@ -9,7 +10,7 @@
 #define PIN_NUM_CS    13
 #define SPI_DMA_CHAN   1
 
-bool mount_sdcard(sdmmc_card_t **g_card) {
+esp_err_t mount_sdcard(sdmmc_card_t **g_card) {
     esp_err_t ret;
 
     spi_bus_config_t bus_cfg = {
@@ -38,11 +39,11 @@ bool mount_sdcard(sdmmc_card_t **g_card) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(ret));
         spi_bus_free(SPI2_HOST);
-        return false;
+        return ESP_FAIL;
     }
 
     sdmmc_card_print_info(stdout, *g_card);
-    return true;
+    return ESP_OK;
 }
 
 void unmount_sdcard(sdmmc_card_t **g_card) {

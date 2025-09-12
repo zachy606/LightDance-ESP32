@@ -48,10 +48,10 @@ typedef struct {
 void print_framedata(const FrameData *frame_data);
 
 void PatternTable_init(PatternTable *self, const char *mount_point);
-bool PatternTable_load_times(PatternTable *self);
-bool PatternTable_index_frames(PatternTable *self);
-void PatternTable_read_frame_at( PatternTable *self, const int index,FrameData *framedata);
-void PatternTable_read_frame_go_through( PatternTable *self,FrameData *framedata);
+esp_err_t PatternTable_load_times(PatternTable *self);
+esp_err_t PatternTable_index_frames(PatternTable *self);
+esp_err_t PatternTable_read_frame_at( PatternTable *self, const int index,FrameData *framedata);
+esp_err_t PatternTable_read_frame_go_through( PatternTable *self,FrameData *framedata);
 const uint32_t *PatternTable_get_time_array(const PatternTable *self);
 int PatternTable_get_total_frames(const PatternTable *self);
 int PatternTable_get_total_leds(const PatternTable *self);

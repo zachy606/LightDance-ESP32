@@ -1,11 +1,12 @@
 #include "app_config.h"
+#include "esp_err.h"
 #include "player.h"
 #include "sdcard.h"
 #include <stdio.h>                 // for fflush()
+#include "esp_rom_sys.h"
 
 
-
-void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data ){
+esp_err_t player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data ){
     p-> cnt = 0;
     p->  reader_index = 0;
 
@@ -15,25 +16,28 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
     p-> s_refresh_task = NULL;
 
     p-> gptimer = NULL;
-
+    
     // 1) mount SD
-    if (!mount_sdcard(&p->Reader.card)) {
+    if (mount_sdcard(&p->Reader.card) != ESP_OK) {
         ESP_LOGE("SD", "SD mount failed. Abort.");
-        return;
+        vTaskDelay(10);
+        return ESP_FAIL;
     }
 
     PatternTable_init(&p->Reader, mount_point);
 
 
-    if (!PatternTable_load_times(&p->Reader)) {
+    if (PatternTable_load_times(&p->Reader)!= ESP_OK) {
         ESP_LOGE("Player init", "Failed to load times.txt");
         unmount_sdcard(&p->Reader.card);
-        return;
+        vTaskDelay(10);
+        return ESP_FAIL;
     }
-    if (!PatternTable_index_frames(&p->Reader)) {
+    if (PatternTable_index_frames(&p->Reader)!= ESP_OK) {
         ESP_LOGE("Player init", "Failed to index data.txt");
         unmount_sdcard(&p->Reader.card);
-        return;
+        vTaskDelay(10);
+        return ESP_FAIL;
     }
 
     ESP_LOGD("Player init", "FPS %d",p->Reader.fps);
@@ -48,7 +52,7 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
              p->Reader.fps);
     fflush(stdout);
 
-
+    return ESP_OK;
 }
 
 
@@ -79,7 +83,7 @@ bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptime
         return true;
     }
     
-    ESP_LOGE("timer","failed to alarm");
+    // ESP_LOGE("timer","failed to alarm");
     return false;
 }
 
@@ -103,7 +107,7 @@ void refresh_task(void *arg){
             if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
                 ESP_LOGD("refill","refill");
                 
-                PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]);
+                ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]));
     
             }
             ESP_LOGD("refill","READ finish");
