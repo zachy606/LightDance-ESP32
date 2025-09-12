@@ -1,179 +1,152 @@
+#include "player_content.h"
 #include "app_config.h"
 #include "esp_err.h"
+#include "esp_log_level.h"
+#include "sdcard.h"          // for un/mount helpers
+#include "esp_log.h"
+#include "testing.h"
 #include "player.h"
-#include "sdcard.h"
-#include <stdio.h>                 // for fflush()
-#include "esp_rom_sys.h"
+
+#include <stdio.h>           // fgets, printf
+#include <string.h>          // strtok, strcmp, strcspn
+#include <stdlib.h>          // atoi
+
+#define TAG "state"
 
 
-esp_err_t player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data ){
-    p-> cnt = 0;
-    p->  reader_index = 0;
+void player_init(player *p){
 
-
-    p->  suspend_detect_refresh = false;
- 
-    p-> s_refresh_task = NULL;
-
-    p-> gptimer = NULL;
+    ESP_ERROR_CHECK(player_reader_init(p,MOUNT_POINT,TIME_DATA,FRAME_DATA));
+    player_var_init(p);
+    ESP_LOGI(TAG,"start init");
+    ESP_ERROR_CHECK(PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]));
+    ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]));
     
-    // 1) mount SD
-    if (mount_sdcard(&p->Reader.card) != ESP_OK) {
-        ESP_LOGE("SD", "SD mount failed. Abort.");
-        vTaskDelay(10);
-        return ESP_FAIL;
-    }
-
-    PatternTable_init(&p->Reader, mount_point);
-
-
-    if (PatternTable_load_times(&p->Reader)!= ESP_OK) {
-        ESP_LOGE("Player init", "Failed to load times.txt");
-        unmount_sdcard(&p->Reader.card);
-        vTaskDelay(10);
-        return ESP_FAIL;
-    }
-    if (PatternTable_index_frames(&p->Reader)!= ESP_OK) {
-        ESP_LOGE("Player init", "Failed to index data.txt");
-        unmount_sdcard(&p->Reader.card);
-        vTaskDelay(10);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGD("Player init", "FPS %d",p->Reader.fps);
-    if(p->Reader.fps==0) p->Reader.fps = DEFAULT_FPS;
-
-    ESP_LOGD("Player init", "FPS %d",p->Reader.fps);
-
-
-    ESP_LOGI("Player init", "Total frames=%d, total_leds=%d, fps=%d",
-             PatternTable_get_total_frames(&p->Reader),
-             PatternTable_get_total_leds(&p->Reader),
-             p->Reader.fps);
-    fflush(stdout);
-
-    return ESP_OK;
+    
+    timer_init(p);
 }
-
-
-void player_var_init(player *p){
-    
-    p->  cnt = 0;
-
-    p->  reader_index = 0;
-
-    p->  suspend_detect_refresh = false;
-
-    p-> s_refresh_task = NULL;
-
-    p-> gptimer = NULL;
-
-}
-
-
-bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self)
-{
-    player *p = (player *)self;    
-    p->cnt++;
-    // print_framedata(&fd_test[reader_index%2] ,&g_reader);
-    if(p->suspend_detect_refresh){
-        p->suspend_detect_refresh = false;
-        xTaskResumeFromISR(p->s_refresh_task );
-        
-        return true;
-    }
-    
-    // ESP_LOGE("timer","failed to alarm");
-    return false;
-}
-
-
-void refresh_task(void *arg){
-    player *p = (player *)arg;    
-    p->suspend_detect_refresh = true;
-    vTaskSuspend(NULL);
-    while(1){
-        
-        /*
-        led light
-        */
-
-
-        if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
-            // print_framedata(&fd_test ,&g_reader);
-            ESP_LOGD("refill","change frame");
-            ESP_LOGD("IRAM", "%" PRIu32 "",p->Reader.frame_times[p->reader_index]);
-            p->reader_index++;
-            if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
-                ESP_LOGD("refill","refill");
-                
-                ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]));
-    
-            }
-            ESP_LOGD("refill","READ finish");
-            p->suspend_detect_refresh = true;
-            vTaskSuspend(NULL);
-        }
-        
-    }
-}
-
-
-
-void timer_init(player *p){
-    
-    gptimer_config_t timer_config = {
-        .clk_src = GPTIMER_CLK_SRC_DEFAULT, 
-        .direction = GPTIMER_COUNT_UP,      
-        .resolution_hz = TIMER_RESOLUTION_HZ,   
-    };
-
-    ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &p->gptimer));
-
-    gptimer_event_callbacks_t cbs = {
-        .on_alarm = example_timer_on_alarm_cb_v1,
-    };
-    ESP_ERROR_CHECK(gptimer_register_event_callbacks(p->gptimer, &cbs,p));
-    ESP_LOGD("TIMER", "Enable timer");
-    ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
-
-    
-    gptimer_alarm_config_t alarm_config2 = {
-        .reload_count = 0,
-        .alarm_count = TIMER_RESOLUTION_HZ/p->Reader.fps, // period = 1s
-        .flags.auto_reload_on_alarm = true,
-    };
-    ESP_ERROR_CHECK(gptimer_set_alarm_action(p->gptimer, &alarm_config2));
-    ESP_LOGD("TIMER", "Start timer, auto-reload at alarm event");
-}
-
 
 void player_start(player *p){
-    ESP_ERROR_CHECK(gptimer_start(p->gptimer));
-    ESP_LOGI("PLAYER", "Start");
-    xTaskCreate(refresh_task, "refresh_task", 4096, p, 5, &p->s_refresh_task );
+
+    if(p->state == STATE_DELAY||p->state == STATE_STOPPED ||p->state == STATE_IDLE){
+        p->state = STATE_RUNNING;
+        // p->reader_index = start_frame_index;
+        player_start_content(p);
+    }
+    else{
+        ESP_LOGW(TAG,"wrong state not allow to start");
+        player_get_state(p);
+    }
+
 }
+
 
 void player_pause(player *p){
-    ESP_ERROR_CHECK(gptimer_stop(p->gptimer));
-    ESP_ERROR_CHECK(gptimer_disable(p->gptimer));
-  
-    ESP_LOGI("PLAYER", "pause");
+
+    if(p->state == STATE_RUNNING){
+        player_pause_content(p);
+        p->state = STATE_PAUSED;
+
+    }
+    else{
+        ESP_LOGW(TAG,"wrong state not allow to paused");
+        player_get_state(p);
+    }
+
 }
+
 
 void player_resume(player *p){
-    ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
-    ESP_ERROR_CHECK(gptimer_start(p->gptimer));
-    ESP_LOGI("PLAYER", "resume");
-}
+    
+    if(p->state == STATE_PAUSED){
+        player_resume_content(p);
+        p->state = STATE_RUNNING;
 
+    }
+    else{
+        ESP_LOGW(TAG,"wrong state not allow to resume");
+        player_get_state(p);
+    }
+}
 
 void player_stop(player *p){
 
-    ESP_LOGI("PLAYER", "stop");
-    ESP_ERROR_CHECK(gptimer_del_timer(p->gptimer));
-    ESP_LOGD("TIMER", "delete");
-    ESP_LOGD("FILE", "delete");
-    vTaskDelete(p->s_refresh_task);
-    ESP_LOGD("TASK", "delete");
+    if(p->state == STATE_RUNNING){
+
+        p->state = STATE_STOPPED;
+        player_pause_content(p);
+        player_stop_content(p);
+
+    }
+    else if(p->state == STATE_PAUSED){
+        p->state = STATE_STOPPED;
+        player_stop_content(p);
+    }
+    else{
+        ESP_LOGW(TAG,"wrong state not allow to stop");
+        player_get_state(p);
+    }
+}
+
+
+void player_exit(player *p){
+    
+    
+    if(p->state == STATE_STOPPED){
+
+        p->state = STATE_EXITING;
+        fclose(p->Reader.data_fp);
+        unmount_sdcard(&p->Reader.card);
+        ESP_LOGI(TAG, "Main exits.");
+
+    }
+    else{
+        ESP_LOGW(TAG,"wrong state not allow to exit");
+        player_get_state(p);
+    }
+}
+    
+void player_delay(player *p,int delaytime,int delaylight){
+
+    if(p->state == STATE_STOPPED ||p->state == STATE_IDLE){
+        delaytime = 0;
+        delaylight = 0;
+        int64_t delay = perf_timer_start();
+        while(!perf_timer_cnt(delay,delaytime,"DELAY", "DELAYTIME")){
+            
+            if(perf_timer_cnt(delay,delaylight,"DELAY", "DELAYlight")){
+
+            }
+            vTaskDelay(10);
+        }
+    
+    }
+    else{
+        ESP_LOGI(TAG,"wrong state not allow to delay");
+        player_get_state(p);
+    }
+    
+        
+}
+
+void player_get_state( player *p){
+    
+    if(p->state == STATE_IDLE ){
+        ESP_LOGI(TAG,"now is STATE_IDLE ");
+    }
+    else if(p->state == STATE_RUNNING ){
+        ESP_LOGI(TAG,"now is STATE_RUNNING ");
+    }
+    else if(p->state == STATE_PAUSED ){
+        ESP_LOGI(TAG,"now is STATE_PAUSED ");
+    }
+    else if(p->state == STATE_STOPPED ){
+        ESP_LOGI(TAG,"now is STATE_STOPPED ");
+    }
+    else if(p->state == STATE_EXITING ){
+        ESP_LOGI(TAG,"now is STATE_EXITING ");
+    }
+    else if(p->state == STATE_DELAY ){
+        ESP_LOGI(TAG,"now is STATE_DELAY ");
+    }
 }

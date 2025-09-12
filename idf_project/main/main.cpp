@@ -1,8 +1,8 @@
 #include"app_config.h"
 #include "pattern_table.h"
-#include "player.h"
+#include "player_content.h"
 #include "sdcard.h"
-#include "state_changer.h"
+#include "player.h"
 
 #include <freertos/FreeRTOS.h>
 
@@ -14,7 +14,6 @@
 #define TAG "PLAYER_MAIN"
 
 static player P;
-static PlayerState State = STATE_IDLE;
 
 extern "C" void app_main(void);
 
@@ -141,15 +140,15 @@ void app_main(void)
         
   
     
-    state_init(&P);
+    player_init(&P);
     
-    state_start(&P,&State);
+    player_start(&P);
     vTaskDelay(500);
-    state_pause(&P,&State);
+    player_pause(&P);
     vTaskDelay(500);
-    state_resume(&P,&State);
+    player_resume(&P);
     vTaskDelay(1000);
-    state_stop(&P,&State);
+    player_stop(&P);
     vTaskDelay(300);
-    state_exit(&P,&State);
+    player_exit(&P);
 }
