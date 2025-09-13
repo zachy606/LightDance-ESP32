@@ -16,11 +16,14 @@
 
 void player_init(player *p){
 
+    //init variable
     ESP_ERROR_CHECK(player_reader_init(p,MOUNT_POINT,TIME_DATA,FRAME_DATA));
     player_var_init(p);
     ESP_LOGI(TAG,"start init");
-    ESP_ERROR_CHECK(PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]));
-    ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]));
+
+    //2. get frame data ready to play
+    ESP_ERROR_CHECK(PatternTable_read_frame_at(&p->pattern_table,p->reader_index,&p->fd_test[p->reader_index%2]));
+    ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->pattern_table,&p->fd_test[(p->reader_index+1)%2]));
     
     
     timer_init(p);
@@ -35,7 +38,7 @@ void player_start(player *p){
     }
     else{
         ESP_LOGW(TAG,"wrong state not allow to start");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
     }
 
 }
@@ -50,7 +53,7 @@ void player_pause(player *p){
     }
     else{
         ESP_LOGW(TAG,"wrong state not allow to paused");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
     }
 
 }
@@ -65,7 +68,7 @@ void player_resume(player *p){
     }
     else{
         ESP_LOGW(TAG,"wrong state not allow to resume");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
     }
 }
 
@@ -84,7 +87,7 @@ void player_stop(player *p){
     }
     else{
         ESP_LOGW(TAG,"wrong state not allow to stop");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
     }
 }
 
@@ -95,14 +98,14 @@ void player_exit(player *p){
     if(p->state == STATE_STOPPED){
 
         p->state = STATE_EXITING;
-        fclose(p->Reader.data_fp);
-        unmount_sdcard(&p->Reader.card);
+        fclose(p->pattern_table.data_fp);
+        unmount_sdcard(&p->pattern_table.card);
         ESP_LOGI(TAG, "Main exits.");
 
     }
     else{
         ESP_LOGW(TAG,"wrong state not allow to exit");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
     }
 }
     
@@ -123,13 +126,14 @@ void player_delay(player *p,int delaytime,int delaylight){
     }
     else{
         ESP_LOGI(TAG,"wrong state not allow to delay");
-        player_get_state(p);
+        PlayerState stage_logout_ = player_get_state(p);
+     
     }
     
         
 }
 
-void player_get_state( player *p){
+PlayerState player_get_state( player *p){
     
     if(p->state == STATE_IDLE ){
         ESP_LOGI(TAG,"now is STATE_IDLE ");
@@ -149,4 +153,8 @@ void player_get_state( player *p){
     else if(p->state == STATE_DELAY ){
         ESP_LOGI(TAG,"now is STATE_DELAY ");
     }
+    else{
+        ESP_LOGI(TAG,"unknown stage ");
+    }
+    return p->state;
 }

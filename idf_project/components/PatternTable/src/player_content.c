@@ -24,39 +24,40 @@ esp_err_t player_reader_init(player *p, const char *mount_point,const char *time
 
     p-> gptimer = NULL;
     
-    // 1) mount SD
-    if (mount_sdcard(&p->Reader.card) != ESP_OK) {
+    // 1. mount SD
+    if (mount_sdcard(&p->pattern_table.card) != ESP_OK) {
         ESP_LOGE("SD", "SD mount failed. Abort.");
         vTaskDelay(10);
         return ESP_FAIL;
     }
 
-    PatternTable_init(&p->Reader, mount_point);
+    //2. init pattern table and load time and data
+    PatternTable_init(&p->pattern_table, mount_point);
 
 
-    if (PatternTable_load_times(&p->Reader)!= ESP_OK) {
+    if (PatternTable_load_times(&p->pattern_table)!= ESP_OK) {
         ESP_LOGE("Player init", "Failed to load times.txt");
-        unmount_sdcard(&p->Reader.card);
+        unmount_sdcard(&p->pattern_table.card);
         vTaskDelay(10);
         return ESP_FAIL;
     }
-    if (PatternTable_index_frames(&p->Reader)!= ESP_OK) {
+    if (PatternTable_index_frames(&p->pattern_table)!= ESP_OK) {
         ESP_LOGE("Player init", "Failed to index data.txt");
-        unmount_sdcard(&p->Reader.card);
+        unmount_sdcard(&p->pattern_table.card);
         vTaskDelay(10);
         return ESP_FAIL;
     }
 
-    ESP_LOGD("Player init", "FPS %d",p->Reader.fps);
-    if(p->Reader.fps==0) p->Reader.fps = DEFAULT_FPS;
+    ESP_LOGD("Player init", "FPS %d",p->pattern_table.fps);
+    if(p->pattern_table.fps==0) p->pattern_table.fps = DEFAULT_FPS;
 
-    ESP_LOGD("Player init", "FPS %d",p->Reader.fps);
+    ESP_LOGD("Player init", "FPS %d",p->pattern_table.fps);
 
 
     ESP_LOGI("Player init", "Total frames=%d, total_leds=%d, fps=%d",
-             PatternTable_get_total_frames(&p->Reader),
-             PatternTable_get_total_leds(&p->Reader),
-             p->Reader.fps);
+             PatternTable_get_total_frames(&p->pattern_table),
+             PatternTable_get_total_leds(&p->pattern_table),
+             p->pattern_table.fps);
     fflush(stdout);
 
     return ESP_OK;
@@ -81,8 +82,9 @@ void player_var_init(player *p){
 bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self)
 {
     player *p = (player *)self;    
-    p->cnt++;
-    // print_framedata(&fd_test[reader_index%2] ,&g_reader);
+    p->cnt++;// count for changing frame
+    
+    // if refresh task is no in suspend, resume it 
     if(p->suspend_detect_refresh){
         p->suspend_detect_refresh = false;
         xTaskResumeFromISR(p->s_refresh_task );
@@ -90,7 +92,7 @@ bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptime
         return true;
     }
     
-    // ESP_LOGE("timer","failed to alarm");
+    // if not in refresh task is no in suspend
     return false;
 }
 
@@ -101,23 +103,26 @@ void refresh_task(void *arg){
     vTaskSuspend(NULL);
     while(1){
         
-        /*
-        led light
+        //refresh frame playing
+        //reserved for led light 
         
         FrameData* tmp_framedata = player_get_current_play_framedata(p);
         led_config_t* tmp_led_config_t = player_get_LED_config_table(p);
 
-        */
-        
-        if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
-            // print_framedata(&fd_test ,&g_reader);
+        //
+        //detect whether to change frame
+        if ((p->cnt+1) *(1000/p->pattern_table.fps) >= p->pattern_table.frame_times[p->reader_index] ){
+            
+            //1. change index
             ESP_LOGD("refill","change frame");
-            ESP_LOGD("IRAM", "%" PRIu32 "",p->Reader.frame_times[p->reader_index]);
+            ESP_LOGD("IRAM", "%" PRIu32 "",p->pattern_table.frame_times[p->reader_index]);
             p->reader_index++;
-            if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
+
+            //2. load new frame 
+            if (p->reader_index+1 < PatternTable_get_total_frames(&p->pattern_table)){
                 ESP_LOGD("refill","refill");
                 
-                ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]));
+                ESP_ERROR_CHECK(PatternTable_read_frame_go_through(&p->pattern_table,&p->fd_test[(p->reader_index-1)%2]));
     
             }
             ESP_LOGD("refill","READ finish");
@@ -129,7 +134,7 @@ void refresh_task(void *arg){
 }
 
 
-
+//init timer for alarm
 void timer_init(player *p){
     
     gptimer_config_t timer_config = {
@@ -150,7 +155,7 @@ void timer_init(player *p){
     
     gptimer_alarm_config_t alarm_config2 = {
         .reload_count = 0,
-        .alarm_count = TIMER_RESOLUTION_HZ/p->Reader.fps, // period = 1s
+        .alarm_count = TIMER_RESOLUTION_HZ/p->pattern_table.fps, // period = 1s
         .flags.auto_reload_on_alarm = true,
     };
     ESP_ERROR_CHECK(gptimer_set_alarm_action(p->gptimer, &alarm_config2));
@@ -193,5 +198,5 @@ const FrameData* player_get_current_play_framedata(const player*p){
 }
 
 const led_config_t* player_get_LED_config_table(const player*p){
-    return p->Reader.led_config_arr;
+    return p->pattern_table.led_config_arr;
 }

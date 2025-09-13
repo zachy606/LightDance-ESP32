@@ -40,17 +40,7 @@ const uint8_t PCA_CHANNEL[LED_CONFIG_NUM] = {
     
 };
 
-
-void print_framedata(const FrameData *frame_data){
-    ESP_LOGI("FD","fade %d",(int)frame_data->fade);
-    // for(int i=0;i<self->total_leds;i++){
-    for(int i=0;i<3;i++){
-        ESP_LOGI("FD","R %d, G %d, B %d, A %d",frame_data->colors[i][0],frame_data->colors[i][1],frame_data->colors[i][2],frame_data->colors[i][3]);
-    }
-}
-
-
-
+//init variable
 void PatternTable_init(PatternTable *self, const char *mount_point) {
     self->mount_point = mount_point;
     self->data_fp = NULL;
@@ -62,7 +52,10 @@ void PatternTable_init(PatternTable *self, const char *mount_point) {
     self->index = 0;
 }
 
+
 esp_err_t PatternTable_load_times(PatternTable *self) {
+
+    // 1. open time.txt
     char path[PATH_BUF_LEN];
     snprintf(path, sizeof(path), "%s/%s", self->mount_point, TIME_DATA);
     self->time_fp = fopen(path, "r");
@@ -72,6 +65,7 @@ esp_err_t PatternTable_load_times(PatternTable *self) {
         return ESP_FAIL;
     }
 
+    // 2.load content and count total frames
     self->total_frames = 0;
     while (fscanf(self->time_fp, "%lu", &self->frame_times[self->total_frames]) == 1) {
         self->total_frames++;
@@ -83,12 +77,14 @@ esp_err_t PatternTable_load_times(PatternTable *self) {
     return ESP_OK;
 }
 
+// turning hex into uint8_t
 static inline uint8_t hex_nibble(char c) {
     if (c >= '0' && c <= '9') return (uint8_t)(c - '0');
     c = (char)tolower((unsigned char)c);
     return (uint8_t)(10 + (c - 'a'));
 }
 
+//combine hexpair to make byte information
 static inline uint8_t hexpair_to_byte(char hi, char lo) {
     return (uint8_t)((hex_nibble(hi) << 4) | hex_nibble(lo));
 }
@@ -172,6 +168,8 @@ static esp_err_t stream_dense_hex_to_bytes(FILE *fp, size_t need_hex, uint8_t *o
 
 
 esp_err_t PatternTable_index_frames(PatternTable *self) {
+
+    //1. open data.txt
     char path[PATH_BUF_LEN];
     snprintf(path, sizeof(path), "%s/%s", MOUNT_POINT, FRAME_DATA);
     self->data_fp = fopen(path, "r");
@@ -180,13 +178,13 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
         return ESP_FAIL;
     }
 
-    // 1) parts
+    // 2. read total num of leds and ofs
     if (fscanf(self->data_fp, "%d", &self->total_parts) != 1){
         ESP_LOGE(TAG, "Failed to scan data file total parts");
         return ESP_FAIL;
     } 
 
-    // 2) part lengths
+    // 3. read num of ledstripes and sum for total leds
     self->total_leds = 0;
     for (int i = 0; i < self->total_parts; ++i) {
         if (fscanf(self->data_fp, "%d", &self->part_lengths[i]) != 1){
@@ -199,7 +197,7 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
     PatternTable_construct_led_config(self);
 
 
-    // 3) fps
+    // 4. load fps
     if (fscanf(self->data_fp, "%d", &self->fps) != 1){
         ESP_LOGE(TAG, "Failed to scan data file fps");
         return ESP_FAIL;
@@ -209,7 +207,7 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
     int c;
     while ((c = fgetc(self->data_fp)) != '\n' && c != EOF) {}
 
-    // 4) frames index
+    // 5. frames index
     const size_t need_hex = (size_t)self->total_leds * 8; // RRGGBBAA per LED
     self->total_frames = 0;
 
@@ -237,10 +235,6 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
         while ((c = fgetc(self->data_fp)) != '\n' && c != EOF) {}
 
         ESP_ERROR_CHECK(discard_exact_chars(self->data_fp, need_hex));
-        // if (!discard_exact_chars(self->data_fp, need_hex)) {
-        //     self->total_frames--;
-        //     break;
-        // }
     }
 
     ESP_LOGI(TAG, "Indexed %d frames", self->total_frames);
@@ -251,26 +245,29 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
 
 esp_err_t PatternTable_read_frame_at(PatternTable *self, const int index, FrameData *framedata) {
 
+    // 1. check data file has been opened
     if (!self->data_fp ){
         ESP_LOGE(TAG,"no data file open");
         return ESP_FAIL;
     }    
-
+    // 2. check index (default 0)
     if ( index < 0 || index >= self->total_frames){
         ESP_LOGE(TAG,"wrong index");
         return ESP_FAIL;
     }
-
+    // 3. jump to that offset
     fseek(self->data_fp, self->frame_offsets[index], SEEK_SET);
     int64_t read_timer = perf_timer_start();
+
+    //4. get fade
     int fade;
     if (fscanf(self->data_fp, "%d", &fade) != 1){
         ESP_LOGE(TAG,"failed to get fade");
         return ESP_FAIL;
     } 
-    framedata->fade = (fade != 0);
+    framedata->fade = (fade != 0);//making default as 0
 
-   
+   //5. get frame data RGBA
     int c;
     while ((c = fgetc(self->data_fp)) != '\n' && c != EOF) {}
 
@@ -291,15 +288,19 @@ esp_err_t PatternTable_read_frame_at(PatternTable *self, const int index, FrameD
 
 esp_err_t PatternTable_read_frame_go_through(PatternTable *self, FrameData *framedata) {
     
+    // 1. check data file has been opened
     if (!self->data_fp ){
         ESP_LOGE(TAG,"no data file open");
         return ESP_FAIL;
     }    
 
+    // 2. check index(don't overflow)
     if ( self->index >= self->total_frames){
         ESP_LOGI(TAG,"already last frames");
         return ESP_OK;
     }
+
+    //3. get fade
     int fade;
     if (fscanf(self->data_fp, "%d", &fade) != 1){
         ESP_LOGE(TAG,"failed to ge t fade");
@@ -307,7 +308,7 @@ esp_err_t PatternTable_read_frame_go_through(PatternTable *self, FrameData *fram
     } 
     framedata->fade = (fade != 0);
 
-    
+    //4. get frame data RGBA
     int c;
     while ((c = fgetc(self->data_fp)) != '\n' && c != EOF) {}
 
