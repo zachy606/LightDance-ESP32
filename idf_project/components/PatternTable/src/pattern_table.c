@@ -9,10 +9,36 @@
 #include <string.h>
 #include <stdlib.h>
 #include "testing.h"
-
+#include "led_def.h"
 
 #define TAG "LD_READER"
 
+
+
+// default for led_config_t for every led
+// LED_CONFIG_NUM could be change in app_config
+// if change dont forget to fix the default table here
+const uint8_t GPIO_OR_ADDR[LED_CONFIG_NUM] = {
+    
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    
+};
+
+const uint8_t PCA_CHANNEL[LED_CONFIG_NUM] = {
+    
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  
+    
+};
 
 
 void print_framedata(const FrameData *frame_data){
@@ -170,6 +196,9 @@ esp_err_t PatternTable_index_frames(PatternTable *self) {
         self->total_leds += self->part_lengths[i];
     }
 
+    PatternTable_construct_led_config(self);
+
+
     // 3) fps
     if (fscanf(self->data_fp, "%d", &self->fps) != 1){
         ESP_LOGE(TAG, "Failed to scan data file fps");
@@ -307,4 +336,18 @@ int PatternTable_get_total_frames(const PatternTable *self) {
 
 int PatternTable_get_total_leds(const PatternTable *self) {
     return self->total_leds;
+}
+
+void PatternTable_construct_led_config(PatternTable *self){
+    for(int i=0; i<self->total_parts;i++){
+
+        self-> led_config_arr[i].led_count = self->part_lengths[i];
+        if(self-> led_config_arr[i].led_count == 1){
+            self-> led_config_arr[i].type = LED_TYPE_OF;
+        } else{
+            self-> led_config_arr[i].type = LED_TYPE_STRIP;
+        }
+        self-> led_config_arr[i].gpio_or_addr = GPIO_OR_ADDR[i];
+        self-> led_config_arr[i].pca_channel = PCA_CHANNEL[i];
+    }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,7 +17,7 @@ extern "C" {
 #include "pattern_table.h"      // for PatternTable, FrameData
 #include "sdmmc_cmd.h"          // for sdmmc_card_t
 #include "testing.h"
-
+#include "led_def.h"
 
 
 typedef enum {
@@ -65,7 +66,8 @@ void player_resume_content(player *p);
 void player_pause_content(player *p);
 void player_stop_content(player *p);
 
-
+const FrameData* player_get_current_play_framedata(const player*p);
+const led_config_t* player_get_LED_config_table(const player*p);
 
 
 #ifdef __cplusplus

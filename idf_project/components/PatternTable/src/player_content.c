@@ -103,9 +103,12 @@ void refresh_task(void *arg){
         
         /*
         led light
+        
+        FrameData* tmp_framedata = player_get_current_play_framedata(p);
+        led_config_t* tmp_led_config_t = player_get_LED_config_table(p);
+
         */
-
-
+        
         if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
             // print_framedata(&fd_test ,&g_reader);
             ESP_LOGD("refill","change frame");
@@ -185,5 +188,10 @@ void player_stop_content(player *p){
     ESP_LOGD("TASK", "delete");
 }
 
+const FrameData* player_get_current_play_framedata(const player*p){
+    return &p->fd_test[p->reader_index%2];
+}
 
-
+const led_config_t* player_get_LED_config_table(const player*p){
+    return p->Reader.led_config_arr;
+}

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "app_config.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -10,6 +11,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "sdmmc_cmd.h"
+#include "led_def.h"
 
 #define MAX_PARTS 40
 // MAX_PARTS : MAX total num of led stripes + OFs
@@ -41,6 +43,7 @@ typedef struct {
     const char *mount_point;
     sdmmc_card_t *card;
 
+    led_config_t led_config_arr[LED_CONFIG_NUM];
     
 } PatternTable;
 
@@ -52,6 +55,9 @@ esp_err_t PatternTable_load_times(PatternTable *self);
 esp_err_t PatternTable_index_frames(PatternTable *self);
 esp_err_t PatternTable_read_frame_at( PatternTable *self, const int index,FrameData *framedata);
 esp_err_t PatternTable_read_frame_go_through( PatternTable *self,FrameData *framedata);
+
+void PatternTable_construct_led_config(PatternTable *self);
+
 const uint32_t *PatternTable_get_time_array(const PatternTable *self);
 int PatternTable_get_total_frames(const PatternTable *self);
 int PatternTable_get_total_leds(const PatternTable *self);
